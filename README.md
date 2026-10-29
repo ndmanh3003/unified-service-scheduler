@@ -2,6 +2,16 @@
 
 NestJS backend with PostgreSQL. Everything runs in Docker; no Node.js installation is required on the host.
 
+## Documentation
+
+| Document                                         | Contents                                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| [`docs/ASSESSMENT.md`](docs/ASSESSMENT.md)       | Summary of the assessment brief (original PDF in `docs/assessment/`)          |
+| [`docs/SPEC.md`](docs/SPEC.md)                   | Requirements, assumptions, REST API, error catalog, acceptance tests          |
+| [`docs/SYSTEM_DESIGN.md`](docs/SYSTEM_DESIGN.md) | Architecture, booking flow, data model, caching, observability, key decisions |
+| [`docs/PLAN.md`](docs/PLAN.md)                   | Build order and progress                                                      |
+| [`docs/ai-log.md`](docs/ai-log.md)               | Record of AI collaboration and human oversight                                |
+
 ## Getting started
 
 ```bash
