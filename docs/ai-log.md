@@ -38,3 +38,25 @@ Each entry feeds the AI Collaboration Narrative in the README and the video walk
 ## Entries
 
 <!-- Add entries here, newest last. -->
+
+### Step 2: Data model and seed data (2026-10-30)
+
+**Instruction:**
+
+- Keep the code in the standard NestJS layout; write the constraint tests before the migration.
+
+| Issue                                                                               | Caught by                       | Root cause                                                     | Fix                                                                                    |
+| ----------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| First design used ports, use-case classes and in-memory fakes; hard to follow       | Owner code review               | Agent applied Clean Architecture beyond what the project needs | Standard NestJS feature modules; pure rules to live in `src/scheduling/`               |
+| In-memory fakes could not reproduce exclusion constraints, savepoints or lock waits | Owner review                    | Fakes model PostgreSQL behavior by hand                        | Fakes removed; database behavior tested against PostgreSQL                             |
+| Agent filled the third commit with booking rules instead of the data model          | Owner review of the commit list | Agent misread the requested commit order                       | Commit rebuilt as data model and seed; booking rules moved to the booking service step |
+
+| Owner decision                                  | Reason                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| Standard NestJS layout instead of layered ports | Readability for the owner and reviewers at this project size |
+| One commit per step, in the order the owner set | Reviewable history                                           |
+
+**Verification:**
+
+- Constraint tests failed before the migration existed, then 16 integration tests passed.
+- On the Compose stack, the migration ran on startup and the seed inserted 23 vehicles and 5 technicians; e2e tests passed.

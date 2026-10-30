@@ -36,7 +36,7 @@ Rules:
 
 1. The controller validates the DTO and the mandatory `Idempotency-Key` header, then calls the service.
 2. The service runs everything inside one `DataSource.transaction`.
-3. The idempotency key is claimed with `INSERT ... ON CONFLICT DO NOTHING` on `idempotency_keys`, storing a SHA-256 hash of the request payload. If another transaction holds the same key, PostgreSQL blocks the insert until that transaction ends. If an unexpired key already exists: same hash returns the stored result; different hash raises `IDEMPOTENCY_KEY_REUSED`.
+3. The idempotency key is claimed with `INSERT ... ON CONFLICT DO NOTHING` on `idempotency_keys`, storing a SHA-256 hash of the request payload. If another transaction holds the same key, PostgreSQL blocks the insert until that transaction ends. If an unexpired key already exists: same hash replays the stored appointment; different hash raises `IDEMPOTENCY_KEY_REUSED`.
 4. Reference data is loaded. The rules in `scheduling/` validate: start in the future, slot alignment, opening hours in the dealership timezone.
 5. One query lists candidate technicians (qualified, active) and bays (active) for the dealership, excluding those busy in `[start, end)`, and checks the vehicle (A7). `CandidateAllocator` walks the pairs in a deterministic order (sorted by id).
 6. For each candidate pair, the insert runs inside a **SAVEPOINT**. On exclusion violation (`23P01`) the savepoint is rolled back and the violated constraint name tells which resource was taken (technician, bay or vehicle, from the violated constraint). Every remaining pair that uses the taken technician or bay is skipped, and a taken vehicle ends the request with `VEHICLE_ALREADY_BOOKED`. Attempts are bounded (20). A savepoint is required because a failed statement otherwise aborts the whole PostgreSQL transaction.
@@ -49,20 +49,20 @@ Any failure rolls back the transaction, including the idempotency row, which is 
 
 ## 3. Data Model (PostgreSQL)
 
-Enable `btree_gist`. Use plain SQL migrations. Use `uuid` primary keys and `timestamptz` (UTC).
+Enable `btree_gist`. Use plain SQL migrations (`src/database/migrations/`, applied on startup). Use `uuid` primary keys and `timestamptz` (UTC). TypeORM entities in `src/database/entities/` map the tables for reads; they do not map `time_range` and never generate schema.
 
-| Table               | Key columns                                                                                                                                              | Constraints                                |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `dealerships`       | id, name, timezone, open_time, close_time                                                                                                                |                                            |
-| `customers`         | id, name, email, phone                                                                                                                                   | unique email                               |
-| `vehicles`          | id, customer_id, vin, make, model, year                                                                                                                  | unique vin; FK customer                    |
-| `skills`            | id, code, name                                                                                                                                           | unique code                                |
-| `service_types`     | id, code, name, duration_minutes, required_skill_id                                                                                                      | duration > 0; FK skill                     |
-| `technicians`       | id, dealership_id, name, is_active                                                                                                                       | FK dealership                              |
-| `technician_skills` | technician_id, skill_id                                                                                                                                  | PK (technician_id, skill_id)               |
-| `service_bays`      | id, dealership_id, name, is_active                                                                                                                       | FK dealership                              |
-| `appointments`      | id, customer_id, vehicle_id, dealership_id, service_type_id, technician_id, service_bay_id, start_at, end_at, time_range, status, created_at, updated_at | see below                                  |
-| `idempotency_keys`  | key (PK), request_hash, appointment_id, response_status, response_body (jsonb), created_at, expires_at                                                   | `expires_at = created_at + 24 hours` (A12) |
+| Table               | Key columns                                                                                                                                              | Constraints                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `dealerships`       | id, name, timezone, open_time, close_time                                                                                                                |                                                                                                              |
+| `customers`         | id, name, email, phone                                                                                                                                   | unique email                                                                                                 |
+| `vehicles`          | id, customer_id, vin, make, model, year                                                                                                                  | unique vin; FK customer                                                                                      |
+| `skills`            | id, code, name                                                                                                                                           | unique code                                                                                                  |
+| `service_types`     | id, code, name, duration_minutes, required_skill_id                                                                                                      | duration > 0; FK skill                                                                                       |
+| `technicians`       | id, dealership_id, name, is_active                                                                                                                       | FK dealership                                                                                                |
+| `technician_skills` | technician_id, skill_id                                                                                                                                  | PK (technician_id, skill_id)                                                                                 |
+| `service_bays`      | id, dealership_id, name, is_active                                                                                                                       | FK dealership                                                                                                |
+| `appointments`      | id, customer_id, vehicle_id, dealership_id, service_type_id, technician_id, service_bay_id, start_at, end_at, time_range, status, created_at, updated_at | see below                                                                                                    |
+| `idempotency_keys`  | key (PK), request_hash, appointment_id, created_at, expires_at                                                                                           | `expires_at = created_at + 24 hours` (A12); a replay re-reads the appointment, so no response body is stored |
 
 `appointments.status` is `CONFIRMED` or `CANCELLED`. Only `CONFIRMED` is written today; `CANCELLED` is reserved for a future cancellation feature (A9), and the exclusion constraints already ignore it.
 
@@ -77,7 +77,11 @@ EXCLUDE USING gist (service_bay_id WITH =, time_range WITH &&) WHERE (status = '
 EXCLUDE USING gist (vehicle_id     WITH =, time_range WITH &&) WHERE (status = 'CONFIRMED')
 ```
 
-Suggested indexes: `appointments(dealership_id, start_at)`, `appointments(status)`.
+Indexes: `appointments(dealership_id, start_at)` for availability queries; the three exclusion constraints create GiST indexes that also serve overlap lookups by technician, bay and vehicle.
+
+Constraint names (`appointments_technician_no_overlap`, `appointments_service_bay_no_overlap`, `appointments_vehicle_no_overlap`) are part of the contract: the booking service reads them from `23P01` errors to tell which resource was taken.
+
+**Seed data (A10):** `src/database/seed.ts` inserts demo reference data with fixed ids when `DB_SEED=true`, ignoring rows that already exist. It contains a main dealership (three technicians, one inactive technician, three bays) and an express dealership with one technician and one bay for the race-condition demo, plus twenty fleet vehicles so parallel demo requests contend for resources, not for the same vehicle.
 
 ---
 

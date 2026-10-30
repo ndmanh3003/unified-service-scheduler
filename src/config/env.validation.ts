@@ -7,6 +7,8 @@ export interface EnvironmentVariables {
   DB_USER: string;
   DB_PASSWORD: string;
   DB_NAME: string;
+  /** Inserts the demo reference data on startup (A10). */
+  DB_SEED: boolean;
 }
 
 const REQUIRED_STRINGS = [
@@ -46,6 +48,7 @@ export function validateEnv(
     ...(config as Omit<EnvironmentVariables, (typeof PORTS)[number]>),
     NODE_ENV: (config.NODE_ENV as string | undefined) ?? 'development',
     LOG_LEVEL: (config.LOG_LEVEL as string | undefined) ?? 'info',
+    DB_SEED: config.DB_SEED === 'true',
     ...ports,
   };
 }

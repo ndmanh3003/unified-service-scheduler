@@ -24,6 +24,22 @@ The `core.hooksPath` setting enables the repository's Git hooks; the `commit-msg
 
 The application runs in watch mode: the project directory is bind-mounted into the container, so source changes are recompiled and reloaded automatically.
 
+## Database
+
+Migrations in `src/database/migrations/` are plain SQL and run automatically when the application starts. With `DB_SEED=true` (the default in `.env.example`), demo reference data is inserted on startup; existing rows are left untouched, so restarts are safe.
+
+Seeded ids used in the examples:
+
+| Entity                           | Id                                     |
+| -------------------------------- | -------------------------------------- |
+| Dealership (3 technicians/bays)  | `10000000-0000-4000-8000-000000000001` |
+| Dealership (1 technician/bay)    | `10000000-0000-4000-8000-000000000002` |
+| Service type: oil change, 60 min | `30000000-0000-4000-8000-000000000001` |
+| Customer: An Nguyen              | `60000000-0000-4000-8000-000000000001` |
+| Vehicle: An's Toyota Vios        | `70000000-0000-4000-8000-000000000001` |
+
+The full list is in [`src/database/seed.ts`](src/database/seed.ts). To start from an empty database, remove the volume: `docker compose down -v`.
+
 ## Endpoints
 
 | Method | Path            | Description                                                                    |

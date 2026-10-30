@@ -6,7 +6,7 @@ The agent updates this file at every checkpoint. A step is marked done only afte
 
 ## Current step
 
-**Step 2: Data model and seed data** (not started)
+**Step 3: Booking service** (not started)
 
 ## Build order
 
@@ -15,7 +15,7 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 | #   | Step                                                                                                                                                                                 | Status      |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
 | 1   | Scaffold NestJS feature modules, Docker Compose (PostgreSQL), configuration, health endpoints, structured logging with correlation IDs, Testcontainers.                              | Done        |
-| 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                               | Not started |
+| 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                               | Done        |
 | 3   | Booking service: rules in `src/scheduling/` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Not started |
 | 4   | Idempotency and its tests.                                                                                                                                                           | Not started |
 | 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                        | Not started |
@@ -32,6 +32,14 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 - [x] Structured JSON logging (pino) with a correlation id per request, echoed in `X-Correlation-Id`.
 - [x] Conventional Commits `commit-msg` hook.
 - [x] Testcontainers access from the `app` container verified.
+
+### Step 2: Data model and seed data
+
+- [x] Plain SQL migration: reference tables, `appointments` with generated `tstzrange` and three exclusion constraints, `idempotency_keys`.
+- [x] TypeORM entities for reads; migrations run on startup.
+- [x] Idempotent demo seed with fixed ids, enabled by `DB_SEED`.
+- [x] Tests written first: 10 constraint tests and 4 seed tests against PostgreSQL 18 (Testcontainers).
+- Open question: whether a vehicle must belong to the customer in the request. To be decided before step 3.
 
 ## Definition of done
 
