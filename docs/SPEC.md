@@ -54,7 +54,7 @@ This table is the single source for assumptions. Other documents reference them 
 | A5  | The start time must be in the future and aligned to `SLOT_GRANULARITY_MINUTES` (default 15).                                                                                       |
 | A6  | No buffer between appointments. Back-to-back bookings are allowed (consistent with A3).                                                                                            |
 | A7  | A vehicle cannot hold two overlapping confirmed appointments.                                                                                                                      |
-| A8  | Authentication is out of scope. `customerId` is supplied in the request body.                                                                                                      |
+| A8  | Authentication is out of scope. The request names the vehicle, service type, dealership and time, as the brief does; the appointment's customer is the vehicle's owner.            |
 | A9  | Cancellation and rescheduling are out of scope. Appointments are created as `CONFIRMED`; the status column exists so that cancellation can be added later without a schema change. |
 | A10 | Reference data (dealerships, bays, technicians, skills, service types, customers, vehicles) is seeded. No CRUD endpoints are provided for it.                                      |
 | A11 | Only successful bookings are stored for idempotent replay. A failed attempt (for example `409`) is re-evaluated when retried.                                                      |
@@ -81,11 +81,11 @@ This table is the single source for assumptions. Other documents reference them 
 
 ### 4.2 Endpoints
 
-| Method | Path                                               | Description                                                                                                                                                                                                                                                             |
-| ------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/appointments`                                    | Book an appointment. Header `Idempotency-Key: <uuid>` is mandatory. Body: `customerId`, `vehicleId`, `dealershipId`, `serviceTypeId`, `startAt` (ISO 8601). Returns `201`, or `200` with header `Idempotent-Replayed: true` when the same key and payload are replayed. |
-| GET    | `/appointments/:id`                                | Appointment details including customer, vehicle, technician, bay and service type.                                                                                                                                                                                      |
-| GET    | `/availability?dealershipId=&serviceTypeId=&date=` | Available slots for a day with remaining resource counts.                                                                                                                                                                                                               |
+| Method | Path                                               | Description                                                                                                                                                                                                                                               |
+| ------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/appointments`                                    | Book an appointment. Header `Idempotency-Key: <uuid>` is mandatory. Body: `vehicleId`, `dealershipId`, `serviceTypeId`, `startAt` (ISO 8601). Returns `201`, or `200` with header `Idempotent-Replayed: true` when the same key and payload are replayed. |
+| GET    | `/appointments/:id`                                | Appointment details including customer, vehicle, technician, bay and service type.                                                                                                                                                                        |
+| GET    | `/availability?dealershipId=&serviceTypeId=&date=` | Available slots for a day with remaining resource counts.                                                                                                                                                                                                 |
 
 ### 4.3 Operational endpoints
 
@@ -93,19 +93,19 @@ This table is the single source for assumptions. Other documents reference them 
 
 ### 4.4 Error catalog
 
-| Code                       | HTTP | When                                                                       |
-| -------------------------- | ---- | -------------------------------------------------------------------------- |
-| `VALIDATION_FAILED`        | 400  | Malformed body, query or path parameter.                                   |
-| `IDEMPOTENCY_KEY_REQUIRED` | 400  | `Idempotency-Key` header missing or not a UUID.                            |
-| `NOT_FOUND`                | 404  | Appointment, customer, vehicle, dealership or service type does not exist. |
-| `SLOT_UNAVAILABLE`         | 409  | No technician and bay pair is free for the whole range.                    |
-| `VEHICLE_ALREADY_BOOKED`   | 409  | The vehicle has an overlapping confirmed appointment (A7).                 |
-| `NO_QUALIFIED_TECHNICIAN`  | 422  | No active technician at the dealership holds the required skill.           |
-| `OUTSIDE_BUSINESS_HOURS`   | 422  | The range does not fit within opening hours (A4).                          |
-| `START_IN_PAST`            | 422  | `startAt` is not in the future (A5).                                       |
-| `INVALID_SLOT_ALIGNMENT`   | 422  | `startAt` is not aligned to the slot granularity (A5).                     |
-| `IDEMPOTENCY_KEY_REUSED`   | 422  | The key was already used with a different payload.                         |
-| `INTERNAL_ERROR`           | 500  | Unexpected failure. Details are logged, never returned.                    |
+| Code                       | HTTP | When                                                                                              |
+| -------------------------- | ---- | ------------------------------------------------------------------------------------------------- |
+| `VALIDATION_FAILED`        | 400  | Malformed body, query or path parameter; unknown body field; `startAt` without a timezone offset. |
+| `IDEMPOTENCY_KEY_REQUIRED` | 400  | `Idempotency-Key` header missing or not a UUID.                                                   |
+| `NOT_FOUND`                | 404  | Appointment, vehicle, dealership or service type does not exist, or the route is unknown.         |
+| `SLOT_UNAVAILABLE`         | 409  | No technician and bay pair is free for the whole range.                                           |
+| `VEHICLE_ALREADY_BOOKED`   | 409  | The vehicle has an overlapping confirmed appointment (A7).                                        |
+| `NO_QUALIFIED_TECHNICIAN`  | 422  | No active technician at the dealership holds the required skill.                                  |
+| `OUTSIDE_BUSINESS_HOURS`   | 422  | The range does not fit within opening hours (A4).                                                 |
+| `START_IN_PAST`            | 422  | `startAt` is not in the future (A5).                                                              |
+| `INVALID_SLOT_ALIGNMENT`   | 422  | `startAt` is not aligned to the slot granularity (A5).                                            |
+| `IDEMPOTENCY_KEY_REUSED`   | 422  | The key was already used with a different payload.                                                |
+| `INTERNAL_ERROR`           | 500  | Unexpected failure. Details are logged, never returned.                                           |
 
 ---
 

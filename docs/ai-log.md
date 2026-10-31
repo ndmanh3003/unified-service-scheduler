@@ -47,7 +47,7 @@ Each entry feeds the AI Collaboration Narrative in the README and the video walk
 
 | Issue                                                                               | Caught by                       | Root cause                                                     | Fix                                                                                    |
 | ----------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| First design used ports, use-case classes and in-memory fakes; hard to follow       | Owner code review               | Agent applied Clean Architecture beyond what the project needs | Standard NestJS feature modules; pure rules to live in `src/scheduling/`               |
+| First design used ports, use-case classes and in-memory fakes; hard to follow       | Owner code review               | Agent applied Clean Architecture beyond what the project needs | Standard NestJS feature modules                                                        |
 | In-memory fakes could not reproduce exclusion constraints, savepoints or lock waits | Owner review                    | Fakes model PostgreSQL behavior by hand                        | Fakes removed; database behavior tested against PostgreSQL                             |
 | Agent filled the third commit with booking rules instead of the data model          | Owner review of the commit list | Agent misread the requested commit order                       | Commit rebuilt as data model and seed; booking rules moved to the booking service step |
 
@@ -60,3 +60,22 @@ Each entry feeds the AI Collaboration Narrative in the README and the video walk
 
 - Constraint tests failed before the migration existed, then 16 integration tests passed.
 - On the Compose stack, the migration ran on startup and the seed inserted 23 vehicles and 5 technicians; e2e tests passed.
+
+### Step 3: Booking service (2026-10-31)
+
+**Instruction:**
+
+- Build the booking service: allocate a qualified technician and a free bay in one transaction, test first.
+
+| Issue                                                                                | Caught by                | Root cause                     | Fix                                                                                                                             |
+| ------------------------------------------------------------------------------------ | ------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Rules sat in a separate `scheduling/` folder that was neither a module nor a service | Owner review             | Leftover of the layered design | Rules became `BookingPolicyService` in `AppointmentsModule`; time utilities and errors moved to `common/`; unit tests colocated |
+
+| Owner decision                                                | Reason                                              |
+| ------------------------------------------------------------- | --------------------------------------------------- |
+| Customer taken from the vehicle's owner, not from the request | Matches the brief's inputs; no mismatch to validate |
+
+**Verification:**
+
+- Unit and HTTP integration tests written first; 28 unit and 43 integration tests pass.
+- Live stack: four parallel bookings for one slot gave three `201` and one `409`; logs showed savepoint retries skipping taken technicians and bays.

@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '@/app.module.js';
+import { configureApp } from '@/app.setup.js';
 
 describe('Health (e2e)', () => {
   let app: INestApplication<App>;
@@ -13,7 +14,7 @@ describe('Health (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.enableShutdownHooks();
+    configureApp(app);
     await app.init();
   });
 

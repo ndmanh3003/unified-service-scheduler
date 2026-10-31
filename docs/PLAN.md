@@ -6,21 +6,21 @@ The agent updates this file at every checkpoint. A step is marked done only afte
 
 ## Current step
 
-**Step 3: Booking service** (not started)
+**Step 4: Idempotency** (not started)
 
 ## Build order
 
 Each step ends with a checkpoint: summarize what changed, which tests pass, and remaining risks, then wait for review.
 
-| #   | Step                                                                                                                                                                                 | Status      |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
-| 1   | Scaffold NestJS feature modules, Docker Compose (PostgreSQL), configuration, health endpoints, structured logging with correlation IDs, Testcontainers.                              | Done        |
-| 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                               | Done        |
-| 3   | Booking service: rules in `src/scheduling/` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Not started |
-| 4   | Idempotency and its tests.                                                                                                                                                           | Not started |
-| 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                        | Not started |
-| 6   | Availability service: `GET /availability` and its tests.                                                                                                                             | Not started |
-| 7   | Race-condition demo script, README with AI Collaboration Narrative, system design completion, AI log.                                                                                | Not started |
+| #   | Step                                                                                                                                                                                                      | Status      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 1   | Scaffold NestJS feature modules, Docker Compose (PostgreSQL), configuration, health endpoints, structured logging with correlation IDs, Testcontainers.                                                   | Done        |
+| 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                                                    | Done        |
+| 3   | Booking service: `BookingPolicyService` and `CandidateAllocator` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Done        |
+| 4   | Idempotency and its tests.                                                                                                                                                                                | Not started |
+| 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                                             | Not started |
+| 6   | Availability service: `GET /availability` and its tests.                                                                                                                                                  | Not started |
+| 7   | Race-condition demo script, README with AI Collaboration Narrative, system design completion, AI log.                                                                                                     | Not started |
 
 ## Step notes
 
@@ -39,7 +39,16 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 - [x] TypeORM entities for reads; migrations run on startup.
 - [x] Idempotent demo seed with fixed ids, enabled by `DB_SEED`.
 - [x] Tests written first: 10 constraint tests and 4 seed tests against PostgreSQL 18 (Testcontainers).
-- Open question: whether a vehicle must belong to the customer in the request. To be decided before step 3.
+
+### Step 3: Booking service
+
+- [x] `BookingPolicyService` (A4, A5), `CandidateAllocator` and time utilities in `common/time/`, with 28 colocated unit tests written first.
+- [x] `GlobalExceptionFilter` with the unified error body and correlation id; global `ValidationPipe`; `/api/v1` prefix.
+- [x] `POST /api/v1/appointments`: one transaction, candidate pairs tried in savepoints, conflicts resolved by constraint name.
+- [x] `GET /api/v1/appointments/:id` with related records; OpenAPI decorators; cURL examples in the README.
+- [x] The customer is the vehicle's owner (A8 revised); the request carries only the inputs the brief names.
+- [x] Integration tests through HTTP against PostgreSQL (27), written first.
+- The `Idempotency-Key` header is required and validated, but keys are not stored yet (step 4).
 
 ## Definition of done
 

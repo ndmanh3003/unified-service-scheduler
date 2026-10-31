@@ -42,11 +42,39 @@ The full list is in [`src/database/seed.ts`](src/database/seed.ts). To start fro
 
 ## Endpoints
 
-| Method | Path            | Description                                                                    |
-| ------ | --------------- | ------------------------------------------------------------------------------ |
-| GET    | `/health/live`  | Liveness probe. Returns 200 while the process is running.                      |
-| GET    | `/health/ready` | Readiness probe. Returns 200 only when PostgreSQL is reachable, otherwise 503. |
-| GET    | `/docs`         | Interactive API reference (Scalar).                                            |
+| Method | Path                       | Description                                                                       |
+| ------ | -------------------------- | --------------------------------------------------------------------------------- |
+| GET    | `/health/live`             | Liveness probe. Returns 200 while the process is running.                         |
+| GET    | `/health/ready`            | Readiness probe. Returns 200 only when PostgreSQL is reachable, otherwise 503.    |
+| GET    | `/docs`                    | Interactive API reference (Scalar).                                               |
+| POST   | `/api/v1/appointments`     | Book an appointment. Requires an `Idempotency-Key` header (UUID).                 |
+| GET    | `/api/v1/appointments/:id` | Appointment with customer, vehicle, dealership, service type, technician and bay. |
+
+Errors share one shape, `{ "error": { "code", "message", "correlationId" } }`; the codes are listed in [`docs/SPEC.md`](docs/SPEC.md) (Error catalog).
+
+### Examples
+
+Book a 60-minute oil change at the main seeded dealership (the start must be in the future, Monday to Saturday, 08:00 to 17:00 local time, on a 15-minute boundary):
+
+```bash
+curl -i -X POST http://localhost:3000/api/v1/appointments \
+  -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{
+    "vehicleId": "70000000-0000-4000-8000-000000000001",
+    "serviceTypeId": "30000000-0000-4000-8000-000000000001",
+    "dealershipId": "10000000-0000-4000-8000-000000000001",
+    "startAt": "2031-03-03T10:00:00+07:00"
+  }'
+```
+
+Fetch it by the returned id:
+
+```bash
+curl http://localhost:3000/api/v1/appointments/<id>
+```
+
+Booking the same slot again with another vehicle assigns the next free technician and bay; once all three are taken the response is `409 SLOT_UNAVAILABLE`.
 
 ## Logging
 

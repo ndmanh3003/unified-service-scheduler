@@ -8,8 +8,7 @@ export default defineConfig({
     globals: true,
     env: { LOG_LEVEL: 'silent' },
     root: './',
-    include: ['test/unit/**/*.spec.ts', 'src/**/*.spec.ts'],
-    // Unit tests are added together with the booking services.
-    passWithNoTests: true,
+    // Unit tests sit next to the code they test, as in a default NestJS project.
+    include: ['src/**/*.spec.ts'],
   },
 });

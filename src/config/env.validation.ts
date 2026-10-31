@@ -9,6 +9,8 @@ export interface EnvironmentVariables {
   DB_NAME: string;
   /** Inserts the demo reference data on startup (A10). */
   DB_SEED: boolean;
+  /** Appointment start times must align to this many minutes (A5). */
+  SLOT_GRANULARITY_MINUTES: number;
 }
 
 const REQUIRED_STRINGS = [
@@ -40,6 +42,15 @@ export function validateEnv(
     ports[key] = value;
   }
 
+  const granularity = Number(config.SLOT_GRANULARITY_MINUTES ?? 15);
+  if (
+    !Number.isInteger(granularity) ||
+    granularity <= 0 ||
+    1440 % granularity !== 0
+  ) {
+    errors.push('SLOT_GRANULARITY_MINUTES must divide a day in minutes');
+  }
+
   if (errors.length > 0) {
     throw new Error(`Invalid environment configuration: ${errors.join('; ')}`);
   }
@@ -49,6 +60,7 @@ export function validateEnv(
     NODE_ENV: (config.NODE_ENV as string | undefined) ?? 'development',
     LOG_LEVEL: (config.LOG_LEVEL as string | undefined) ?? 'info',
     DB_SEED: config.DB_SEED === 'true',
+    SLOT_GRANULARITY_MINUTES: granularity,
     ...ports,
   };
 }

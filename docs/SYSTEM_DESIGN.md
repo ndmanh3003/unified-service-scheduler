@@ -13,22 +13,24 @@ A single NestJS application organized in feature modules. PostgreSQL is the only
 
 ### Components
 
-| Component               | Role                                                                                                                                                           |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AppointmentsModule`    | `POST /appointments` and `GET /appointments/:id`. The service runs the booking transaction: idempotency claim, validation, allocation, guarded insert.         |
-| `AvailabilityModule`    | `GET /availability`. Computes bookable slots with free resource counts in one query per day.                                                                   |
-| `scheduling/`           | Pure booking rules: `TimeRange`, zoned-time helpers (standard `Intl` API), opening hours (A4), start time (A5), `CandidateAllocator`, typed errors. No NestJS. |
-| `DatabaseModule`        | TypeORM connection, entities, plain SQL migrations, demo seed data.                                                                                            |
-| `LoggerModule`          | Structured JSON logs with a correlation id per request.                                                                                                        |
-| `GlobalExceptionFilter` | Maps typed errors to HTTP codes using the error catalog in `SPEC.md`, and writes the unified error body.                                                       |
-| `HealthModule`          | Liveness and readiness probes.                                                                                                                                 |
+| Component               | Role                                                                                                                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppointmentsModule`    | `POST /appointments` and `GET /appointments/:id`. The service runs the booking transaction: idempotency claim, validation, allocation, guarded insert.                       |
+| `AvailabilityModule`    | `GET /availability`. Computes bookable slots with free resource counts in one query per day.                                                                                 |
+| `BookingPolicyService`  | Provider in `AppointmentsModule`, exported for availability. When an appointment may start and end: start time (A5) and opening hours (A4), both in the dealership timezone. |
+| `CandidateAllocator`    | Plain class created per booking. Walks technician and bay pairs in a deterministic order and skips resources lost to a concurrent booking.                                   |
+| `common/`               | Typed errors (`AppError` subclasses, one per error catalog code), the exception filter, and time utilities (`TimeRange`, zoned-time helpers on the standard `Intl` API).     |
+| `DatabaseModule`        | TypeORM connection, entities, plain SQL migrations, demo seed data.                                                                                                          |
+| `LoggerModule`          | Structured JSON logs with a correlation id per request.                                                                                                                      |
+| `GlobalExceptionFilter` | Maps typed errors to HTTP codes using the error catalog in `SPEC.md`, and writes the unified error body.                                                                     |
+| `HealthModule`          | Liveness and readiness probes.                                                                                                                                               |
 
 Rules:
 
 - Controllers are thin: validate input, call one service method, shape the response.
 - Services own their transactions (`DataSource.transaction`). SQL that depends on PostgreSQL features (ranges, exclusion constraints, savepoints) is written as plain SQL inside the service.
-- `scheduling/` contains no framework or database code, so every rule is unit tested in isolation.
-- Errors are thrown as typed errors from `scheduling/errors.ts` and mapped to HTTP codes in one place, `GlobalExceptionFilter`.
+- Business rules live in injectable services of their module; time arithmetic lives in `common/time/`. Neither touches the database, so both are unit tested without one.
+- Errors are thrown as typed errors from `common/errors.ts` and mapped to HTTP codes in one place, `GlobalExceptionFilter`.
 
 ---
 
@@ -37,7 +39,7 @@ Rules:
 1. The controller validates the DTO and the mandatory `Idempotency-Key` header, then calls the service.
 2. The service runs everything inside one `DataSource.transaction`.
 3. The idempotency key is claimed with `INSERT ... ON CONFLICT DO NOTHING` on `idempotency_keys`, storing a SHA-256 hash of the request payload. If another transaction holds the same key, PostgreSQL blocks the insert until that transaction ends. If an unexpired key already exists: same hash replays the stored appointment; different hash raises `IDEMPOTENCY_KEY_REUSED`.
-4. Reference data is loaded. The rules in `scheduling/` validate: start in the future, slot alignment, opening hours in the dealership timezone.
+4. The dealership, service type and vehicle are loaded; the vehicle's owner becomes the appointment's customer (A8). `BookingPolicyService` validates: start in the future, slot alignment, opening hours in the dealership timezone.
 5. One query lists candidate technicians (qualified, active) and bays (active) for the dealership, excluding those busy in `[start, end)`, and checks the vehicle (A7). `CandidateAllocator` walks the pairs in a deterministic order (sorted by id).
 6. For each candidate pair, the insert runs inside a **SAVEPOINT**. On exclusion violation (`23P01`) the savepoint is rolled back and the violated constraint name tells which resource was taken (technician, bay or vehicle, from the violated constraint). Every remaining pair that uses the taken technician or bay is skipped, and a taken vehicle ends the request with `VEHICLE_ALREADY_BOOKED`. Attempts are bounded (20). A savepoint is required because a failed statement otherwise aborts the whole PostgreSQL transaction.
 7. No pair succeeds: `SLOT_UNAVAILABLE`. No qualified technician exists at the dealership: `NO_QUALIFIED_TECHNICIAN`.
@@ -105,11 +107,11 @@ Constraint names (`appointments_technician_no_overlap`, `appointments_service_ba
 
 The test cases themselves are listed in `SPEC.md` (Acceptance Tests). This section defines how they are run.
 
-- **Unit** tests cover the rules in `src/scheduling/`, with no framework and no database.
+- **Unit** tests cover `BookingPolicyService`, `CandidateAllocator` and the time utilities, with no database.
 - Service behavior is covered by integration tests through HTTP against real PostgreSQL, because its correctness depends on constraints, transactions and savepoints that fakes cannot reproduce.
 - **Integration and concurrency** tests run against a real PostgreSQL instance through Testcontainers. SQLite or an in-memory database is never a substitute.
 - Tests run inside the `app` container, so Testcontainers needs the host Docker daemon: mount `/var/run/docker.sock` into the `app` service and set `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`.
-- Test files are named by suite: `test/unit/**/*.spec.ts` (`npm run test`), `test/integration/**/*.int-spec.ts` (`npm run test:integration`), `test/e2e/**/*.e2e-spec.ts` (`npm run test:e2e`).
+- Test files are named by suite: unit tests sit next to their source as `src/**/*.spec.ts` (`npm run test`), as in a default NestJS project; `test/integration/**/*.int-spec.ts` (`npm run test:integration`), `test/e2e/**/*.e2e-spec.ts` (`npm run test:e2e`).
 - **Regression evidence:** a naive check-then-insert repository exists only as a test double under `test/`, never in `src/`. The concurrency suite runs against it to show that it double books under load while the constraint-based implementation does not.
 - **Static checks:** oxlint with type-aware rules (`no-floating-promises`, `no-explicit-any`, `no-console`) and Prettier.
 
@@ -125,7 +127,7 @@ The test cases themselves are listed in `SPEC.md` (Acceptance Tests). This secti
 | No cache for `GET /availability`                                             | Redis read-through cache with a short TTL                                                               | The brief does not require a cache, and availability is one indexed query per day. A cache adds a service to run and a staleness window; it can be added if measured load calls for it.                                                 |
 | Plain SQL migrations                                                         | ORM-generated migrations or `synchronize`                                                               | Exclusion constraints, generated columns and `btree_gist` cannot be expressed through ORM decorators.                                                                                                                                   |
 | Assign technician and bay automatically (A1)                                 | Let the user choose                                                                                     | Matches the requirement of a single booking request, and keeps allocation inside one transaction.                                                                                                                                       |
-| Standard NestJS feature modules; pure rules in `src/scheduling/`             | Clean Architecture with ports, adapters and framework-free use cases                                    | Easier to read and review at this size. Rules that benefit from fast unit tests stay framework-free; logic that depends on PostgreSQL is tested against PostgreSQL instead of fakes.                                                    |
+| Standard NestJS feature modules; business rules in injectable services       | Clean Architecture with ports, adapters and framework-free use cases                                    | Default NestJS structure is easier to read and review at this size. Logic that depends on PostgreSQL is tested against PostgreSQL instead of fakes.                                                                                     |
 
 ---
 

@@ -43,7 +43,7 @@ Architecture, database and testing rules are defined in `docs/SYSTEM_DESIGN.md`.
 ## Simplicity
 
 - Use standard NestJS building blocks: feature modules, `@Injectable` services, controllers, DTOs with `class-validator`. Do not introduce ports, adapters, use-case classes or other abstraction layers without the owner's approval.
-- Keep pure booking rules (time ranges, opening hours, slot alignment, candidate order) in `src/scheduling/` as plain TypeScript without NestJS imports, so they are unit tested without a framework or database.
+- Business rules belong in an injectable service of the feature module (for example `BookingPolicyService` in `appointments/`). Shared utilities and typed errors belong in `src/common/`. Unit tests sit next to the file they test (`*.spec.ts`).
 - Logic whose correctness depends on PostgreSQL (constraints, transactions, savepoints, idempotency) is tested against PostgreSQL, never against in-memory fakes.
 
 ## Code quality standards
