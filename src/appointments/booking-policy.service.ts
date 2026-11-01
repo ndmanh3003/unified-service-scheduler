@@ -8,7 +8,12 @@ import {
   StartInPastError,
 } from '@/common/errors.js';
 import { TimeRange } from '@/common/time/time-range.js';
-import { toLocal } from '@/common/time/zoned-time.js';
+import {
+  fromLocal,
+  LocalDate,
+  toLocal,
+  weekdayOf,
+} from '@/common/time/zoned-time.js';
 
 const SUNDAY = 0;
 
@@ -73,6 +78,32 @@ export class BookingPolicyService {
     ) {
       throw new OutsideBusinessHoursError();
     }
+  }
+
+  /**
+   * Every start on a local day that satisfies A4 and A5 apart from being in
+   * the future: on a slot boundary, with the whole service before closing.
+   */
+  slotStarts(
+    day: LocalDate,
+    dealership: DealershipHours,
+    durationMinutes: number,
+  ): Date[] {
+    if (weekdayOf(day) === SUNDAY) {
+      return [];
+    }
+    const open = minuteOfDay(dealership.openTime);
+    const close = minuteOfDay(dealership.closeTime);
+    const firstSlot = Math.ceil(open / this.slotMinutes) * this.slotMinutes;
+    const starts: Date[] = [];
+    for (
+      let minute = firstSlot;
+      minute + durationMinutes <= close;
+      minute += this.slotMinutes
+    ) {
+      starts.push(fromLocal(day, minute, dealership.timezone));
+    }
+    return starts;
   }
 }
 

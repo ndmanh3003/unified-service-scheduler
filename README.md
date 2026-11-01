@@ -45,9 +45,10 @@ The full list is in [`src/database/seed.ts`](src/database/seed.ts). To start fro
 | Method | Path                       | Description                                                                       |
 | ------ | -------------------------- | --------------------------------------------------------------------------------- |
 | GET    | `/health/live`             | Liveness probe. Returns 200 while the process is running.                         |
-| GET    | `/health/ready`            | Readiness probe. Returns 200 only when PostgreSQL is reachable, otherwise 503.    |
+| GET    | `/health/ready`            | Readiness probe. Returns 503 when PostgreSQL is unreachable.                      |
 | GET    | `/docs`                    | Interactive API reference (Scalar).                                               |
 | POST   | `/api/v1/appointments`     | Book an appointment. Requires an `Idempotency-Key` header (UUID).                 |
+| GET    | `/api/v1/availability`     | Bookable starts for a day with free technician and bay counts.                    |
 | GET    | `/api/v1/appointments/:id` | Appointment with customer, vehicle, dealership, service type, technician and bay. |
 
 Errors share one shape, `{ "error": { "code", "message", "correlationId" } }`; the codes are listed in [`docs/SPEC.md`](docs/SPEC.md) (Error catalog).
@@ -68,7 +69,13 @@ curl -i -X POST http://localhost:3000/api/v1/appointments \
   }'
 ```
 
-Fetch it by the returned id:
+Check availability for a day first (optional):
+
+```bash
+curl 'http://localhost:3000/api/v1/availability?dealershipId=10000000-0000-4000-8000-000000000001&serviceTypeId=30000000-0000-4000-8000-000000000001&date=2031-03-03'
+```
+
+Fetch a booked appointment by the returned id:
 
 ```bash
 curl http://localhost:3000/api/v1/appointments/<id>

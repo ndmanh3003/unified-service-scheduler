@@ -6,7 +6,7 @@ The agent updates this file at every checkpoint. A step is marked done only afte
 
 ## Current step
 
-**Step 6: Availability service** (not started)
+**Step 7: Demo, documentation and submission** (not started)
 
 ## Build order
 
@@ -19,7 +19,7 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 | 3   | Booking service: `BookingPolicyService` and `CandidateAllocator` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Done        |
 | 4   | Idempotency and its tests.                                                                                                                                                                                | Done        |
 | 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                                             | Done        |
-| 6   | Availability service: `GET /availability` and its tests.                                                                                                                                                  | Not started |
+| 6   | Availability service: `GET /availability` and its tests.                                                                                                                                                  | Done        |
 | 7   | Race-condition demo script, README with AI Collaboration Narrative, system design completion, AI log.                                                                                                     | Not started |
 
 ## Step notes
@@ -63,6 +63,12 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 - [x] Two parallel requests with one key: one row, same appointment id. One vehicle in parallel, at one dealership and at two: one booking.
 - [x] Naive check-then-insert double (test-only) double books under the same load.
 - [x] Bug found by these tests: parallel inserts deadlocked (`40P01`) and returned `500`. Fixed with an advisory lock per dealership and local day, plus a bounded same-pair retry on deadlock.
+
+### Step 6: Availability service
+
+- [x] `GET /api/v1/availability`: slot starts from `BookingPolicyService.slotStarts`, free counts from one SQL query.
+- [x] Tests written first: 3 unit and 8 availability integration tests.
+- [x] Live stack: availability returns `200` for the seeded dealership.
 
 ## Definition of done
 

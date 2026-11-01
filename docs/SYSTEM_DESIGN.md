@@ -89,8 +89,12 @@ Constraint names (`appointments_technician_no_overlap`, `appointments_service_ba
 
 ## 4. Availability
 
-- `GET /availability` is computed from PostgreSQL on every request; it is not cached (see Key Decisions).
-- Availability is advisory: `POST /appointments` re-checks every resource inside its transaction.
+`AvailabilityService` answers `GET /availability`:
+
+1. The dealership and service type are loaded (`404` if unknown). `BookingPolicyService.slotStarts` lists every start on the local day that satisfies A4 and A5; starts in the past are dropped.
+2. One SQL query (`unnest ... WITH ORDINALITY`) counts, for every start, the free qualified technicians and the free bays. Starts with at least one of each are returned with both counts. Any free qualified technician can pair with any free bay, so the counts are independent.
+
+Availability is advisory: it reserves nothing, and `POST /appointments` re-checks every resource inside its transaction. A start shown as free can therefore still return `409` if another booking takes it first. Availability is not cached; see Key Decisions.
 
 ---
 

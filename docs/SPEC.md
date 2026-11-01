@@ -85,7 +85,7 @@ This table is the single source for assumptions. Other documents reference them 
 | ------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | POST   | `/appointments`                                    | Book an appointment. Header `Idempotency-Key: <uuid>` is mandatory. Body: `vehicleId`, `dealershipId`, `serviceTypeId`, `startAt` (ISO 8601). Returns `201`, or `200` with header `Idempotent-Replayed: true` when the same key and payload are replayed. |
 | GET    | `/appointments/:id`                                | Appointment details including customer, vehicle, technician, bay and service type.                                                                                                                                                                        |
-| GET    | `/availability?dealershipId=&serviceTypeId=&date=` | Available slots for a day with remaining resource counts.                                                                                                                                                                                                 |
+| GET    | `/availability?dealershipId=&serviceTypeId=&date=` | Future starts on a day in the dealership timezone (`date` is `YYYY-MM-DD`) with at least one free qualified technician and one free bay, and how many of each are free. Not required by the brief; it lets a client find a free start before booking.     |
 
 ### 4.3 Operational endpoints
 
