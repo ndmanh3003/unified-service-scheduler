@@ -196,3 +196,26 @@ describe('minuteOfDay', () => {
     expect(() => minuteOfDay('8 am')).toThrow();
   });
 });
+
+describe('BookingPolicyService.slotStarts', () => {
+  const policy = policyWithSlots(15);
+  const monday = { year: 2030, month: 1, day: 7 };
+
+  it('lists every aligned start whose service ends by closing time', () => {
+    const starts = policy.slotStarts(monday, dealership, 60);
+
+    expect(starts[0]).toEqual(new Date('2030-01-07T01:00:00Z'));
+    expect(starts.at(-1)).toEqual(new Date('2030-01-07T09:00:00Z'));
+    expect(starts).toHaveLength(33);
+  });
+
+  it('returns nothing on a Sunday', () => {
+    expect(
+      policy.slotStarts({ year: 2030, month: 1, day: 13 }, dealership, 60),
+    ).toEqual([]);
+  });
+
+  it('returns nothing when the service is longer than the opening hours', () => {
+    expect(policy.slotStarts(monday, dealership, 10 * 60)).toEqual([]);
+  });
+});
