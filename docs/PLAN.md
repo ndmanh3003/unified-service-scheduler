@@ -6,7 +6,7 @@ The agent updates this file at every checkpoint. A step is marked done only afte
 
 ## Current step
 
-**Step 4: Idempotency** (not started)
+**Step 5: Concurrency tests** (not started)
 
 ## Build order
 
@@ -17,7 +17,7 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 | 1   | Scaffold NestJS feature modules, Docker Compose (PostgreSQL), configuration, health endpoints, structured logging with correlation IDs, Testcontainers.                                                   | Done        |
 | 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                                                    | Done        |
 | 3   | Booking service: `BookingPolicyService` and `CandidateAllocator` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Done        |
-| 4   | Idempotency and its tests.                                                                                                                                                                                | Not started |
+| 4   | Idempotency and its tests.                                                                                                                                                                                | Done        |
 | 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                                             | Not started |
 | 6   | Availability service: `GET /availability` and its tests.                                                                                                                                                  | Not started |
 | 7   | Race-condition demo script, README with AI Collaboration Narrative, system design completion, AI log.                                                                                                     | Not started |
@@ -48,7 +48,13 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 - [x] `GET /api/v1/appointments/:id` with related records; OpenAPI decorators; cURL examples in the README.
 - [x] The customer is the vehicle's owner (A8 revised); the request carries only the inputs the brief names.
 - [x] Integration tests through HTTP against PostgreSQL (27), written first.
-- The `Idempotency-Key` header is required and validated, but keys are not stored yet (step 4).
+
+### Step 4: Idempotency
+
+- [x] `IdempotencyService`: key claimed in the booking transaction with `INSERT ... ON CONFLICT DO NOTHING`; SHA-256 of the payload; 24-hour retention (A12).
+- [x] Same key and payload: `200` with `Idempotent-Replayed: true` and the original appointment. Different payload: `422 IDEMPOTENCY_KEY_REUSED`.
+- [x] Failed attempts roll the key back with the booking, so retries are re-evaluated (A11). Expired keys are treated as new.
+- [x] Tests written first: 7 integration tests. Parallel requests with one key are covered in step 5.
 
 ## Definition of done
 

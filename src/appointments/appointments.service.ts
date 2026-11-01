@@ -17,8 +17,10 @@ import {
 } from '@/common/errors.js';
 import { TimeRange } from '@/common/time/time-range.js';
 import { BookingPolicyService } from './booking-policy.service.js';
+import { IdempotencyService } from './idempotency.service.js';
 
 export interface CreateAppointmentInput {
+  idempotencyKey: string;
   vehicleId: string;
   serviceTypeId: string;
   dealershipId: string;
@@ -26,6 +28,12 @@ export interface CreateAppointmentInput {
 }
 
 export type AppointmentDetails = Required<Appointment>;
+
+export interface CreateAppointmentResult {
+  appointment: AppointmentDetails;
+  /** True when an earlier booking under the same key is returned. */
+  replayed: boolean;
+}
 
 const EXCLUSION_VIOLATION = '23P01';
 
@@ -52,6 +60,7 @@ export class AppointmentsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly bookingPolicy: BookingPolicyService,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   /**
@@ -59,8 +68,25 @@ export class AppointmentsService {
    * decide every race; the queries before the insert only narrow the
    * candidates. See docs/SYSTEM_DESIGN.md (Booking Flow).
    */
-  create(input: CreateAppointmentInput): Promise<AppointmentDetails> {
+  create(input: CreateAppointmentInput): Promise<CreateAppointmentResult> {
+    // Any failure rolls back the idempotency claim with the booking (A11).
     return this.dataSource.transaction(async (manager) => {
+      const claim = await this.idempotency.claim(
+        manager,
+        input.idempotencyKey,
+        this.idempotency.hashRequest(input),
+      );
+      if (claim.status === 'replay') {
+        this.logger.log({
+          msg: 'idempotent_replay',
+          appointmentId: claim.appointmentId,
+        });
+        return {
+          appointment: await this.loadDetails(manager, claim.appointmentId),
+          replayed: true,
+        };
+      }
+
       const dealership = await manager.findOneBy(Dealership, {
         id: input.dealershipId,
       });
@@ -135,7 +161,15 @@ export class AppointmentsService {
             ...pair,
             attempts,
           });
-          return this.loadDetails(manager, outcome.id);
+          await this.idempotency.complete(
+            manager,
+            input.idempotencyKey,
+            outcome.id,
+          );
+          return {
+            appointment: await this.loadDetails(manager, outcome.id),
+            replayed: false,
+          };
         }
 
         // A concurrent booking committed first; the savepoint undid the attempt.

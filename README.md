@@ -76,6 +76,8 @@ curl http://localhost:3000/api/v1/appointments/<id>
 
 Booking the same slot again with another vehicle assigns the next free technician and bay; once all three are taken the response is `409 SLOT_UNAVAILABLE`.
 
+Sending the same request again with the same `Idempotency-Key` within 24 hours returns the original appointment with `200` and the header `Idempotent-Replayed: true`, instead of booking twice. Reusing a key with a different payload returns `422 IDEMPOTENCY_KEY_REUSED`. Failed attempts are not stored, so a retry after an error is evaluated again.
+
 ## Logging
 
 Logs are structured JSON (pino), one line per event. Every request carries a correlation id: the value of the `X-Correlation-Id` request header, or a generated UUID. The id is returned in the `X-Correlation-Id` response header and attached to every log line of that request. `LOG_LEVEL` sets the level (`info` by default; tests use `silent`).
