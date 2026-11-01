@@ -79,3 +79,19 @@ Each entry feeds the AI Collaboration Narrative in the README and the video walk
 
 - Unit and HTTP integration tests written first; 28 unit and 43 integration tests pass.
 - Live stack: four parallel bookings for one slot gave three `201` and one `409`; logs showed savepoint retries skipping taken technicians and bays.
+
+### Steps 4 and 5: Idempotency and concurrency (2026-11-01)
+
+**Instruction:**
+
+- Build idempotency and the concurrency suite. Show test-first in the history: a `test:` commit before each `feat:` commit.
+
+| Issue                                                                          | Caught by                       | Root cause                                                                     | Fix                                                                           |
+| ------------------------------------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| History showed no test commits although tests were written first               | Owner review of the commit list | Agent committed tests and code together                                        | Steps 2 to 4 split into `test:` and `feat:` commits                           |
+| Parallel bookings returned `500 deadlock detected`                             | Concurrency test                | Concurrent inserts on one bay or vehicle wait on each other's uncommitted rows | Advisory lock per dealership and local day; bounded retry on `40P01`          |
+| First fix (retry on deadlock only) still failed under load, up to 53 s per run | Repeated test runs              | Retries deadlocked again while contenders stayed in flight                     | Replaced by the lock above; retry kept for cross-dealership vehicle conflicts |
+
+**Verification:**
+
+- Concurrency suite passed five consecutive runs (about 3 s each); 28 unit, 56 integration and 4 e2e tests pass.

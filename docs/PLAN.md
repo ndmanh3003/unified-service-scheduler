@@ -6,7 +6,7 @@ The agent updates this file at every checkpoint. A step is marked done only afte
 
 ## Current step
 
-**Step 5: Concurrency tests** (not started)
+**Step 6: Availability service** (not started)
 
 ## Build order
 
@@ -18,7 +18,7 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 | 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                                                    | Done        |
 | 3   | Booking service: `BookingPolicyService` and `CandidateAllocator` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Done        |
 | 4   | Idempotency and its tests.                                                                                                                                                                                | Done        |
-| 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                                             | Not started |
+| 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                                             | Done        |
 | 6   | Availability service: `GET /availability` and its tests.                                                                                                                                                  | Not started |
 | 7   | Race-condition demo script, README with AI Collaboration Narrative, system design completion, AI log.                                                                                                     | Not started |
 
@@ -55,6 +55,14 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 - [x] Same key and payload: `200` with `Idempotent-Replayed: true` and the original appointment. Different payload: `422 IDEMPOTENCY_KEY_REUSED`.
 - [x] Failed attempts roll the key back with the booking, so retries are re-evaluated (A11). Expired keys are treated as new.
 - [x] Tests written first: 7 integration tests. Parallel requests with one key are covered in step 5.
+
+### Step 5: Concurrency tests
+
+- [x] 20 parallel requests, one technician and one bay: one `201`, nineteen `409`, one row.
+- [x] 10 parallel requests, three technicians and three bays: exactly three succeed, no resource used twice.
+- [x] Two parallel requests with one key: one row, same appointment id. One vehicle in parallel, at one dealership and at two: one booking.
+- [x] Naive check-then-insert double (test-only) double books under the same load.
+- [x] Bug found by these tests: parallel inserts deadlocked (`40P01`) and returned `500`. Fixed with an advisory lock per dealership and local day, plus a bounded same-pair retry on deadlock.
 
 ## Definition of done
 

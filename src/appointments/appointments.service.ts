@@ -16,6 +16,7 @@ import {
   VehicleAlreadyBookedError,
 } from '@/common/errors.js';
 import { TimeRange } from '@/common/time/time-range.js';
+import { toLocal } from '@/common/time/zoned-time.js';
 import { BookingPolicyService } from './booking-policy.service.js';
 import { IdempotencyService } from './idempotency.service.js';
 
@@ -36,6 +37,15 @@ export interface CreateAppointmentResult {
 }
 
 const EXCLUSION_VIOLATION = '23P01';
+const DEADLOCK_DETECTED = '40P01';
+
+/**
+ * Two transactions inserting overlapping rows can each wait for the other's
+ * uncommitted row; PostgreSQL then aborts one of them. The day lock prevents
+ * this within a dealership; a vehicle booked at two dealerships at once can
+ * still deadlock, and the victim retries the same pair.
+ */
+const MAX_DEADLOCK_RETRIES = 3;
 
 /** Which resource an exclusion constraint protects; see the migration. */
 const RESOURCE_BY_CONSTRAINT: Record<string, ContestedResource | 'vehicle'> = {
@@ -124,6 +134,8 @@ export class AppointmentsService {
       ) {
         throw new NoQualifiedTechnicianError();
       }
+      await this.lockDealershipDay(manager, dealership, range);
+
       if (await this.vehicleIsBusy(manager, vehicle.id, range)) {
         this.logger.log({
           msg: 'booking_conflict',
@@ -145,7 +157,9 @@ export class AppointmentsService {
       );
 
       let attempts = 0;
-      for (let pair = allocator.next(); pair; pair = allocator.next()) {
+      let deadlocks = 0;
+      let pair = allocator.next();
+      while (pair) {
         attempts++;
         const outcome = await this.tryInsert(manager, pair, range, {
           customerId: vehicle.customerId,
@@ -172,6 +186,14 @@ export class AppointmentsService {
           };
         }
 
+        if (outcome.status === 'deadlock') {
+          this.logger.log({ msg: 'booking_deadlock_retry', ...pair });
+          if (++deadlocks > MAX_DEADLOCK_RETRIES) {
+            throw new Error('Booking insert deadlocked repeatedly.');
+          }
+          continue;
+        }
+
         // A concurrent booking committed first; the savepoint undid the attempt.
         this.logger.log({
           msg: 'booking_conflict',
@@ -182,6 +204,7 @@ export class AppointmentsService {
           throw new VehicleAlreadyBookedError();
         }
         allocator.markTaken(pair, outcome.resource);
+        pair = allocator.next();
       }
 
       this.logger.log({
@@ -228,6 +251,7 @@ export class AppointmentsService {
   ): Promise<
     | { status: 'inserted'; id: string }
     | { status: 'conflict'; resource: ContestedResource | 'vehicle' }
+    | { status: 'deadlock' }
   > {
     await manager.query('SAVEPOINT allocation_attempt');
     try {
@@ -250,13 +274,36 @@ export class AppointmentsService {
       await manager.query('RELEASE SAVEPOINT allocation_attempt');
       return { status: 'inserted', id: row.id };
     } catch (error) {
+      const code = pgErrorCode(error);
       const resource = contestedResourceOf(error);
-      if (!resource) {
+      if (code !== DEADLOCK_DETECTED && !resource) {
         throw error;
       }
+      // Any error leaves the transaction aborted; the savepoint recovers it.
       await manager.query('ROLLBACK TO SAVEPOINT allocation_attempt');
-      return { status: 'conflict', resource };
+      return resource
+        ? { status: 'conflict', resource }
+        : { status: 'deadlock' };
     }
+  }
+
+  /**
+   * Serializes bookings for one dealership and local day until the
+   * transaction ends. Overlapping bookings always share that key (A4), so
+   * they queue instead of deadlocking on each other's uncommitted rows, and
+   * each one sees the bookings committed before it. The exclusion constraints
+   * remain the guarantee; this lock only orders the contenders.
+   */
+  private async lockDealershipDay(
+    manager: EntityManager,
+    dealership: Dealership,
+    range: TimeRange,
+  ): Promise<void> {
+    const day = toLocal(range.start, dealership.timezone);
+    await manager.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`booking:${dealership.id}:${day.year}-${day.month}-${day.day}`],
+    );
   }
 
   private async countQualifiedTechnicians(
@@ -322,6 +369,12 @@ export class AppointmentsService {
       serviceBayIds: serviceBays.map((row) => row.id),
     };
   }
+}
+
+function pgErrorCode(error: unknown): string | undefined {
+  return error instanceof QueryFailedError
+    ? (error.driverError as { code?: string }).code
+    : undefined;
 }
 
 function contestedResourceOf(
