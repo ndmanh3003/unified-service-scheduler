@@ -1,6 +1,16 @@
 # Unified Service Scheduler
 
-NestJS backend with PostgreSQL. Everything runs in Docker; no Node.js installation is required on the host.
+Backend for Scenario A of the Keyloop Technical Assessment: an appointment scheduler that books a service for a vehicle at a dealership, assigning a qualified technician and a service bay that are both free for the whole service duration.
+
+NestJS and PostgreSQL. Everything runs in Docker; no Node.js installation is required on the host.
+
+**Highlights**
+
+- No double booking under any concurrency: PostgreSQL `EXCLUDE` constraints on time ranges are the guarantee, not application checks.
+- Automatic allocation across technician and bay pairs, with savepoints so a lost race moves on to the next free pair.
+- Idempotent booking with an `Idempotency-Key` header: duplicate submissions and retries never create a second appointment.
+- Availability endpoint that lists bookable starts for a day; booking re-checks everything in its transaction.
+- Structured JSON logs with a correlation id on every request and every error.
 
 ## Documentation
 
@@ -85,6 +95,26 @@ Booking the same slot again with another vehicle assigns the next free technicia
 
 Sending the same request again with the same `Idempotency-Key` within 24 hours returns the original appointment with `200` and the header `Idempotent-Replayed: true`, instead of booking twice. Reusing a key with a different payload returns `422 IDEMPOTENCY_KEY_REUSED`. Failed attempts are not stored, so a retry after an error is evaluated again.
 
+## Race-condition demo
+
+Twenty parallel requests for the same slot at the seeded dealership with one technician and one bay:
+
+```bash
+docker compose exec app node scripts/race-demo.mjs
+```
+
+Expected output: one `201`, nineteen `409 SLOT_UNAVAILABLE`, and one row in the database. Each run picks a fresh future slot; pass an ISO start time as an argument to choose one. The test suite also runs a naive check-then-insert implementation under the same load to show that it double books.
+
+## Tests
+
+| Suite                             | Command                    | Covers                                                                                                                                                 |
+| --------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unit (`src/**/*.spec.ts`)         | `npm run test`             | Opening hours and slot rules in the dealership timezone, slot generation, candidate order, time ranges                                                 |
+| Integration (`test/integration/`) | `npm run test:integration` | Exclusion constraints, seed, booking API, idempotency, concurrency (20 parallel requests, 3×3 resources, same key), naive double booking, availability |
+| End-to-end (`test/e2e/`)          | `npm run test:e2e`         | Health probes and correlation ids against the Compose stack                                                                                            |
+
+Integration tests run against a real PostgreSQL 18 started by Testcontainers; the acceptance list they implement is in [`docs/SPEC.md`](docs/SPEC.md) (Acceptance Tests).
+
 ## Logging
 
 Logs are structured JSON (pino), one line per event. Every request carries a correlation id: the value of the `X-Correlation-Id` request header, or a generated UUID. The id is returned in the `X-Correlation-Id` response header and attached to every log line of that request. `LOG_LEVEL` sets the level (`info` by default; tests use `silent`).
@@ -108,3 +138,28 @@ After changing dependencies, rebuild the image and recreate the `node_modules` v
 ```bash
 docker compose up --build -V
 ```
+
+## AI Collaboration Narrative
+
+This project was built with Claude Code as the implementation agent. I kept the design authority and the final say on every step; the detailed record is in [`docs/ai-log.md`](docs/ai-log.md), and the design-phase summary is in [`docs/SYSTEM_DESIGN.md`](docs/SYSTEM_DESIGN.md) (GenAI Usage).
+
+**Strategy: give the agent context and rules, then work in small steps.**
+
+- Before any code, I had the agent turn the brief into a specification ([`docs/SPEC.md`](docs/SPEC.md)) with explicit assumptions, an error catalog and acceptance tests, and a design ([`docs/SYSTEM_DESIGN.md`](docs/SYSTEM_DESIGN.md)). I reviewed both and made the key calls myself: an `Idempotency-Key` on bookings so duplicate submissions and retries are safe, and PostgreSQL as the only backing service.
+- [`AGENTS.md`](AGENTS.md) holds the rules every session follows: read the plan first, one step at a time with a checkpoint, tests before code, PostgreSQL constraints for double-booking prevention, nothing outside the specification. [`docs/PLAN.md`](docs/PLAN.md) tracks the steps.
+
+**Verification: nothing was accepted on the agent's word.**
+
+- Every behavior started as a failing test; the history shows a `test:` commit before each `feat:` commit.
+- Integration and concurrency tests run against real PostgreSQL, because the correctness of this system lives in constraints, transactions and locks that mocks cannot reproduce.
+- After each step I ran the stack: cURL calls, the race demo, and the logs.
+
+**Where I corrected the agent.**
+
+| What the agent did                                                          | How it was caught                                 | Outcome                                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Built a Clean Architecture with ports, use-case classes and in-memory fakes | My code review: too hard to follow for this scope | Rebuilt as standard NestJS modules and services; fakes replaced by PostgreSQL tests               |
+| Committed tests and code together, hiding test-first                        | My review of the commit list                      | History split into `test:` and `feat:` commits                                                    |
+| Parallel bookings returned `500 deadlock detected`                          | Concurrency tests                                 | First fix (retry only) failed under repeated runs; replaced by a per-dealership-day advisory lock |
+
+**Quality gates.** TypeScript strict mode, type-aware oxlint (no floating promises, no `any`, no `console`), Prettier, Conventional Commits enforced by a Git hook, and the full test suite in the container before each commit.

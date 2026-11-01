@@ -9,7 +9,42 @@ Assumptions (A1 to A12) are defined in `SPEC.md` and referenced here by ID.
 
 ## 1. Architecture
 
-A single NestJS application organized in feature modules. PostgreSQL is the only backing service and the single source of truth for correctness.
+A single NestJS application organized in feature modules. PostgreSQL is the only backing service and the single source of truth for correctness. The application is stateless, so more instances can run behind a load balancer without changing the design.
+
+### Architecture diagram
+
+```mermaid
+flowchart LR
+    client["Client<br/>cURL, Scalar UI, test harness"]
+
+    subgraph app["NestJS application (stateless, N instances)"]
+        direction TB
+        logger["LoggerModule<br/>pino JSON, correlation id"]
+        filter["GlobalExceptionFilter<br/>unified error body"]
+        apptCtl["AppointmentsController"]
+        apptSvc["AppointmentsService<br/>transaction, allocation, savepoints"]
+        policy["BookingPolicyService<br/>opening hours, slot rules"]
+        idem["IdempotencyService"]
+        availCtl["AvailabilityController"]
+        availSvc["AvailabilityService"]
+        health["HealthController"]
+    end
+
+    pg[("PostgreSQL 18<br/>EXCLUDE constraints<br/>idempotency keys")]
+
+    client -->|"POST/GET /api/v1/appointments"| apptCtl
+    client -->|"GET /api/v1/availability"| availCtl
+    client -->|"/health/live, /health/ready"| health
+    apptCtl --> apptSvc
+    apptSvc --> policy
+    apptSvc --> idem
+    availCtl --> availSvc
+    availSvc --> policy
+    apptSvc -->|"one transaction per booking"| pg
+    idem --> pg
+    availSvc -->|"one query per day"| pg
+    health --> pg
+```
 
 ### Components
 
@@ -31,6 +66,19 @@ Rules:
 - Services own their transactions (`DataSource.transaction`). SQL that depends on PostgreSQL features (ranges, exclusion constraints, savepoints) is written as plain SQL inside the service.
 - Business rules live in injectable services of their module; time arithmetic lives in `common/time/`. Neither touches the database, so both are unit tested without one.
 - Errors are thrown as typed errors from `common/errors.ts` and mapped to HTTP codes in one place, `GlobalExceptionFilter`.
+
+### Technology choices
+
+| Technology                                               | Role                                                      | Why                                                                                                                                    |
+| -------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| NestJS 12, TypeScript (strict, ESM)                      | HTTP framework, dependency injection, validation, OpenAPI | Modules, providers and DTOs give a conventional structure reviewers recognize; decorators generate the OpenAPI contract from the code. |
+| PostgreSQL 18                                            | System of record                                          | `tstzrange`, `EXCLUDE USING gist` and savepoints let the database itself reject double bookings under any concurrency.                 |
+| TypeORM                                                  | Connection, migrations runner, entity reads               | Integrates with NestJS; raw SQL is used where PostgreSQL features matter, and migrations are plain SQL.                                |
+| pino (`nestjs-pino`)                                     | Structured JSON logging                                   | Low overhead, one JSON line per event, request context carried automatically.                                                          |
+| Vitest, Testcontainers, supertest                        | Unit, integration and HTTP tests                          | Integration and concurrency tests run against a real PostgreSQL 18, the only way to test constraints, locks and savepoints.            |
+| Docker Compose                                           | Local runtime                                             | One command starts the application and PostgreSQL; nothing is installed on the host.                                                   |
+| Scalar                                                   | API reference at `/docs`                                  | Interactive client for the OpenAPI document, which stands in for the frontend.                                                         |
+| oxlint (type-aware), Prettier, Conventional Commits hook | Code quality                                              | Catches floating promises, `any` and `console`; consistent formatting and history.                                                     |
 
 ---
 
@@ -100,10 +148,15 @@ Availability is advisory: it reserves nothing, and `POST /appointments` re-check
 
 ## 5. Observability
 
-- **Logging:** structured JSON (pino through `nestjs-pino`). Every request carries a `correlationId` (from `X-Correlation-Id` or generated). Key events: `booking_created`, `booking_conflict`, `idempotent_replay`, `validation_failed`.
-- **Errors:** every error response carries the request's `correlationId`, so a client report can be matched to the server log.
-- **Health:** separate liveness and readiness probes.
-- **Future extension:** Prometheus metrics (booking results by outcome, booking latency) are out of scope for this delivery.
+**Logging.** Structured JSON through pino (`nestjs-pino`), one line per event, level set by `LOG_LEVEL`.
+
+- Every request gets a correlation id: the `X-Correlation-Id` request header, or a generated UUID. It is echoed in the response header, attached to every log line of the request, and included in every error body, so a client report leads straight to the server logs.
+- Each request is logged on completion with method, URL, status and `responseTime` in milliseconds. Headers and bodies are not logged.
+- Domain events: `booking_created` (appointment, technician, bay, attempts), `booking_conflict` (reason: technician, serviceBay, vehicle or no_free_pair), `booking_deadlock_retry`, `idempotent_replay`, `request_rejected` (error code and status), `unhandled_error` (with the stack, never returned to the client).
+
+**Health.** `GET /health/live` (process up) and `GET /health/ready` (PostgreSQL reachable).
+
+**Metrics and tracing (future extension, out of scope).** The log events above are designed to become metrics without code changes in the hot path: booking outcomes by reason, booking latency, attempts per booking, deadlock retries. The next steps would be a Prometheus endpoint (`@willsoto/nestjs-prometheus`) and OpenTelemetry tracing with the correlation id as the trace attribute, exported to the same backend as the logs.
 
 ---
 
@@ -136,12 +189,29 @@ The test cases themselves are listed in `SPEC.md` (Acceptance Tests). This secti
 
 ---
 
-## 8. Scalability
+## 8. Scalability, Performance and Reliability
 
-To be written in the final build step (see [`PLAN.md`](PLAN.md)).
+- **Horizontal scaling.** The application holds no state. Correctness lives in PostgreSQL constraints and transaction-scoped advisory locks, which hold across any number of instances.
+- **Contention.** Bookings queue only per dealership and local day; different days and dealerships proceed in parallel. Each booking holds the lock for a few short queries. Twenty parallel requests for one slot complete in well under a second in the demo.
+- **Reads.** Availability is one SQL query per day, served by the GiST and `start_at` indexes. If reads come to dominate, a read replica or a short-TTL cache could serve it, since it is advisory.
+- **Indexes.** The exclusion constraints create GiST indexes that serve every overlap lookup by technician, bay and vehicle; `appointments(dealership_id, start_at)` serves day scans.
+- **Reliability.** PostgreSQL is the only dependency, so readiness reflects exactly what the service needs. A failed booking leaves no trace, including its idempotency key, so clients can retry safely. Deadlocks that remain possible across dealerships are retried a bounded number of times.
+- **Growth.** `appointments` can be partitioned by `start_at` range when history grows; expired idempotency keys are overwritten on reuse today, and a periodic `DELETE ... WHERE expires_at < now()` job would bound the table.
+- **Not covered:** authentication, rate limiting, multi-region deployment and load testing (see `SPEC.md`, Scope).
 
 ---
 
 ## 9. GenAI Usage
 
-To be written in the final build step (see [`PLAN.md`](PLAN.md)), based on [`ai-log.md`](ai-log.md).
+The owner used Claude Code (Anthropic) as an implementation agent and kept design authority. The full record is in [`ai-log.md`](ai-log.md); the README summarizes the collaboration.
+
+**Design phase.**
+
+- The owner gave the agent the assessment brief ([`ASSESSMENT.md`](ASSESSMENT.md)) and asked for a specification first. The agent drafted requirements, assumptions A1 to A12, the REST API and the error catalog; the owner reviewed them before any code was written.
+- The owner set the main design decisions: an idempotency key on `POST /appointments` to make duplicate submissions and client retries safe, and no state outside PostgreSQL.
+- The agent proposed alternatives for double-booking prevention (check-then-insert, row locks, a Redis lock, exclusion constraints) with trade-offs; the decision table in Key Decisions is the outcome.
+- The agent's first architecture was Clean Architecture with ports and in-memory fakes. The owner rejected it as harder to follow than the problem needs and directed the standard NestJS structure. The owner also removed the fakes: the system's correctness lives in exclusion constraints, savepoints and locks, which a hand-written fake cannot reproduce, so database behavior is tested against real PostgreSQL. These tests later exposed the booking deadlock.
+
+**Guard rails.** `AGENTS.md` gives every session the same rules: read the plan first, one step at a time with a checkpoint, tests before code, PostgreSQL constraints for correctness, no features outside the specification.
+
+**Verification.** Every behavior was specified by a failing test before the code existed. Integration and concurrency tests run against real PostgreSQL. The concurrency suite caught a deadlock the agent had not anticipated; its first fix was rejected after repeated runs, and the advisory lock replaced it. Each step was also run on the Compose stack, and the owner reviewed the commit history and the code after each step.

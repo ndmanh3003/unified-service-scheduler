@@ -39,6 +39,22 @@ Each entry feeds the AI Collaboration Narrative in the README and the video walk
 
 <!-- Add entries here, newest last. -->
 
+### Step 1: Specification, design and scaffold (2026-10-29)
+
+**Instruction:**
+
+- Turn the brief into a specification with explicit assumptions, then a design, before any code; scaffold NestJS with Docker, tests and structured logging.
+
+| Owner decision                                                               | Reason                                                                          |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Mandatory `Idempotency-Key` on `POST /appointments`, stored with the booking | Duplicate submissions and client retries must never create a second appointment |
+| PostgreSQL as the only backing service, no cache                             | The brief does not require one; correctness stays in one place                  |
+| Document every ambiguity as a numbered assumption (A1 to A12)                | The brief asks for reasonable, documented assumptions                           |
+
+**Verification:**
+
+- Specification and design reviewed by the owner before step 2; scaffold verified with health and correlation-id e2e tests and a Testcontainers smoke test.
+
 ### Step 2: Data model and seed data (2026-10-30)
 
 **Instruction:**
@@ -95,3 +111,15 @@ Each entry feeds the AI Collaboration Narrative in the README and the video walk
 **Verification:**
 
 - Concurrency suite passed five consecutive runs (about 3 s each); 28 unit, 56 integration and 4 e2e tests pass.
+
+### Steps 6 and 7: Availability, observability review and submission (2026-11-01)
+
+**Instruction:**
+
+- Build availability, review the observability setup, then finish the demo and documentation.
+
+**Verification:**
+
+- Tests written first: 31 unit, 66 integration and 4 e2e tests pass.
+- Live stack: availability `200`, booking `201`, readiness `200`.
+- Race demo: 20 parallel requests gave one `201`, nineteen `409`, one row.

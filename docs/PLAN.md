@@ -6,21 +6,21 @@ The agent updates this file at every checkpoint. A step is marked done only afte
 
 ## Current step
 
-**Step 7: Demo, documentation and submission** (not started)
+All build steps are done. Remaining for submission: the video (owner).
 
 ## Build order
 
 Each step ends with a checkpoint: summarize what changed, which tests pass, and remaining risks, then wait for review.
 
-| #   | Step                                                                                                                                                                                                      | Status      |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 1   | Scaffold NestJS feature modules, Docker Compose (PostgreSQL), configuration, health endpoints, structured logging with correlation IDs, Testcontainers.                                                   | Done        |
-| 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                                                    | Done        |
-| 3   | Booking service: `BookingPolicyService` and `CandidateAllocator` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Done        |
-| 4   | Idempotency and its tests.                                                                                                                                                                                | Done        |
-| 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                                             | Done        |
-| 6   | Availability service: `GET /availability` and its tests.                                                                                                                                                  | Done        |
-| 7   | Race-condition demo script, README with AI Collaboration Narrative, system design completion, AI log.                                                                                                     | Not started |
+| #   | Step                                                                                                                                                                                                      | Status |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | Scaffold NestJS feature modules, Docker Compose (PostgreSQL), configuration, health endpoints, structured logging with correlation IDs, Testcontainers.                                                   | Done   |
+| 2   | Data model: plain SQL migrations with exclusion constraints, TypeORM entities, demo seed data. Constraint tests first.                                                                                    | Done   |
+| 3   | Booking service: `BookingPolicyService` and `CandidateAllocator` (unit tests first), unified error format, `POST /appointments` and `GET /appointments/:id` with allocation and savepoint retry, OpenAPI. | Done   |
+| 4   | Idempotency and its tests.                                                                                                                                                                                | Done   |
+| 5   | Concurrency tests, including the naive check-then-insert regression evidence.                                                                                                                             | Done   |
+| 6   | Availability service: `GET /availability` and its tests.                                                                                                                                                  | Done   |
+| 7   | Race-condition demo script, README with AI Collaboration Narrative, system design completion, AI log.                                                                                                     | Done   |
 
 ## Step notes
 
@@ -70,11 +70,17 @@ Each step ends with a checkpoint: summarize what changed, which tests pass, and 
 - [x] Tests written first: 3 unit and 8 availability integration tests.
 - [x] Live stack: availability returns `200` for the seeded dealership.
 
+### Step 7: Demo and documentation
+
+- [x] `scripts/race-demo.mjs`: 20 parallel requests, one `201`, nineteen `409`, one row.
+- [x] `SYSTEM_DESIGN.md`: architecture diagram, technology choices, data flows, observability, scalability, GenAI usage.
+- [x] README: highlights, demo, tests, AI Collaboration Narrative.
+
 ## Definition of done
 
-- [ ] `docker compose up` starts everything; migrations and seeds run automatically.
-- [ ] All acceptance tests in `SPEC.md` pass.
-- [ ] Demo script: 20 parallel requests produce one `201`, nineteen `409`, and exactly one database row.
-- [ ] OpenAPI specification and cURL examples are provided.
-- [ ] README documents build, run and test, and contains an **AI Collaboration Narrative** section.
-- [ ] `SYSTEM_DESIGN.md` contains: architecture diagram, component roles, data flow, technology choices with justification, observability strategy, scalability notes, and a dedicated GenAI usage section.
+- [x] `docker compose up` starts everything; migrations and seeds run automatically.
+- [x] All acceptance tests in `SPEC.md` pass.
+- [x] Demo script: 20 parallel requests produce one `201`, nineteen `409`, and exactly one database row.
+- [x] OpenAPI specification and cURL examples are provided.
+- [x] README documents build, run and test, and contains an **AI Collaboration Narrative** section.
+- [x] `SYSTEM_DESIGN.md` contains: architecture diagram, component roles, data flow, technology choices with justification, observability strategy, scalability notes, and a dedicated GenAI usage section.
