@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 480" width="1080" height="480" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <!-- Exactly one, at the start of a path. -->
+    <marker id="one" viewBox="0 0 14 20" refX="0" refY="10" markerWidth="14" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M6,3 V17 M10,3 V17" stroke="#475569" stroke-width="1.5" fill="none"/>
+    </marker>
+    <!-- Zero or many, at the end of a path. -->
+    <marker id="many" viewBox="0 0 26 20" refX="26" refY="10" markerWidth="26" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto">
+      <circle cx="6" cy="10" r="4" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+      <path d="M14,10 L26,2 M14,10 L26,10 M14,10 L26,18" stroke="#475569" stroke-width="1.5" fill="none"/>
+    </marker>
+    <!-- Zero or many, at the start of a path. -->
+    <marker id="manyStart" viewBox="0 0 26 20" refX="0" refY="10" markerWidth="26" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,2 L12,10 M0,10 L12,10 M0,18 L12,10" stroke="#475569" stroke-width="1.5" fill="none"/>
+      <circle cx="20" cy="10" r="4" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+    </marker>
+    <!-- Zero or one, at the end of a path. -->
+    <marker id="zeroOneEnd" viewBox="0 0 22 20" refX="22" refY="10" markerWidth="22" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto">
+      <circle cx="6" cy="10" r="4" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+      <path d="M16,3 V17" stroke="#475569" stroke-width="1.5" fill="none"/>
+    </marker>
+    <!-- Zero or one, at the start of a path. -->
+    <marker id="zeroOneStart" viewBox="0 0 22 20" refX="0" refY="10" markerWidth="22" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M6,3 V17" stroke="#475569" stroke-width="1.5" fill="none"/>
+      <circle cx="16" cy="10" r="4" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+    </marker>
+  </defs>
+
+  <rect width="1080" height="480" rx="8" fill="#ffffff"/>
+
+  <!-- Relationships: "one" at the referenced table, "many" at the referencing table. -->
+  <g stroke="#475569" stroke-width="1.5" fill="none" marker-start="url(#one)" marker-end="url(#many)">
+    <path d="M175,54 H310 V150"/>        <!-- customers -> vehicles -->
+    <path d="M100,78 V280"/>             <!-- customers -> appointments -->
+    <path d="M310,198 V280"/>            <!-- vehicles -> appointments -->
+    <path d="M520,78 V150"/>             <!-- skills -> service_types -->
+    <path d="M520,198 V280"/>            <!-- service_types -> appointments -->
+    <path d="M730,198 V280"/>            <!-- technicians -> appointments -->
+    <path d="M890,78 V114 H770 V150"/>   <!-- dealerships -> technicians -->
+    <path d="M960,78 V150"/>             <!-- dealerships -> service_bays -->
+    <path d="M940,198 V280"/>            <!-- service_bays -> appointments -->
+    <path d="M1015,54 H1040 V280"/>      <!-- dealerships -> appointments -->
+  </g>
+  <!-- Many-to-many through the technician_skills join table. -->
+  <path d="M595,54 H730 V150" stroke="#475569" stroke-width="1.5" fill="none" marker-start="url(#manyStart)" marker-end="url(#many)"/>
+  <path d="M540,336 V410" stroke="#475569" stroke-width="1.5" fill="none" marker-start="url(#zeroOneStart)" marker-end="url(#zeroOneEnd)"/>
+
+  <!-- Relationship labels. -->
+  <g font-size="12" fill="#64748b">
+    <text x="232" y="47" text-anchor="middle">owns</text>
+    <text x="108" y="182">books</text>
+    <text x="318" y="244">serviced in</text>
+    <text x="528" y="120">requires</text>
+    <text x="662" y="47" text-anchor="middle">held by</text>
+    <text x="528" y="244">performed in</text>
+    <text x="738" y="244">assigned to</text>
+    <text x="830" y="108" text-anchor="middle">employs</text>
+    <text x="968" y="120">has</text>
+    <text x="948" y="244">used by</text>
+    <text x="1032" y="182" text-anchor="end">hosts</text>
+    <text x="548" y="378">created under</text>
+  </g>
+
+  <!-- Entities. -->
+  <g font-size="14" font-weight="600" text-anchor="middle">
+    <g fill="#eef2ff" stroke="#6366f1" stroke-width="1.5">
+      <rect x="25" y="30" width="150" height="48" rx="6"/>
+      <rect x="445" y="30" width="150" height="48" rx="6"/>
+      <rect x="865" y="30" width="150" height="48" rx="6"/>
+      <rect x="235" y="150" width="150" height="48" rx="6"/>
+      <rect x="445" y="150" width="150" height="48" rx="6"/>
+      <rect x="655" y="150" width="150" height="48" rx="6"/>
+      <rect x="865" y="150" width="150" height="48" rx="6"/>
+    </g>
+    <rect x="25" y="280" width="1030" height="56" rx="6" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+    <rect x="455" y="410" width="170" height="48" rx="6" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+
+    <g fill="#1e1b4b">
+      <text x="100" y="59">customers</text>
+      <text x="520" y="59">skills</text>
+      <text x="940" y="59">dealerships</text>
+      <text x="310" y="179">vehicles</text>
+      <text x="520" y="179">service_types</text>
+      <text x="730" y="179">technicians</text>
+      <text x="940" y="179">service_bays</text>
+    </g>
+    <text x="540" y="313" fill="#7c2d12">appointments</text>
+    <text x="540" y="439" fill="#064e3b">idempotency_keys</text>
+  </g>
+</svg>

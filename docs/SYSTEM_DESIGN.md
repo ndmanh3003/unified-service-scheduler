@@ -13,38 +13,9 @@ A single NestJS application organized in feature modules. PostgreSQL is the only
 
 ### Architecture diagram
 
-```mermaid
-flowchart LR
-    client["Client<br/>cURL, Scalar UI, test harness"]
+![Architecture diagram](diagrams/architecture.svg)
 
-    subgraph app["NestJS application (stateless, N instances)"]
-        direction TB
-        logger["LoggerModule<br/>pino JSON, correlation id"]
-        filter["GlobalExceptionFilter<br/>unified error body"]
-        apptCtl["AppointmentsController"]
-        apptSvc["AppointmentsService<br/>transaction, allocation, savepoints"]
-        policy["BookingPolicyService<br/>opening hours, slot rules"]
-        idem["IdempotencyService"]
-        availCtl["AvailabilityController"]
-        availSvc["AvailabilityService"]
-        health["HealthController"]
-    end
-
-    pg[("PostgreSQL 18<br/>EXCLUDE constraints<br/>idempotency keys")]
-
-    client -->|"POST/GET /api/v1/appointments"| apptCtl
-    client -->|"GET /api/v1/availability"| availCtl
-    client -->|"/health/live, /health/ready"| health
-    apptCtl --> apptSvc
-    apptSvc --> policy
-    apptSvc --> idem
-    availCtl --> availSvc
-    availSvc --> policy
-    apptSvc -->|"one transaction per booking"| pg
-    idem --> pg
-    availSvc -->|"one query per day"| pg
-    health --> pg
-```
+Every request passes the pipeline, then one feature module. PostgreSQL is the only backing service: its `EXCLUDE` constraints, not application checks, prevent double booking. Each module is described under Components; the booking steps are in Booking Flow; endpoints are in `SPEC.md` (REST API).
 
 ### Components
 
@@ -86,10 +57,17 @@ Rules:
 
 1. The controller validates the DTO and the mandatory `Idempotency-Key` header, then calls the service.
 2. The service runs everything inside one `DataSource.transaction`.
-3. `IdempotencyService` claims the key with `INSERT ... ON CONFLICT DO NOTHING` on `idempotency_keys`, storing a SHA-256 hash of the request payload (start normalized to UTC). If another transaction holds the same key, PostgreSQL blocks the insert until that transaction ends. If an unexpired key already exists: same hash replays the stored appointment (`200`, `Idempotent-Replayed: true`); different hash raises `IDEMPOTENCY_KEY_REUSED`. An expired key is overwritten and treated as new (A12).
+3. `IdempotencyService` claims the key with `INSERT ... ON CONFLICT DO NOTHING` on `idempotency_keys`, storing a SHA-256 hash of the request payload (start normalized to UTC). If another transaction holds the same key, PostgreSQL blocks the insert until that transaction ends. Then:
+   - New key: the booking proceeds.
+   - Unexpired key, same hash: the stored appointment is replayed (`200`, `Idempotent-Replayed: true`).
+   - Unexpired key, different hash: `IDEMPOTENCY_KEY_REUSED`.
+   - Expired key: overwritten and treated as new (A12).
 4. The dealership, service type and vehicle are loaded; the vehicle's owner becomes the appointment's customer (A8). `BookingPolicyService` validates: start in the future, slot alignment, opening hours in the dealership timezone.
 5. A transaction-level advisory lock on (dealership, local day) is taken, so overlapping bookings at one dealership queue instead of deadlocking on each other's uncommitted rows. Then the vehicle is checked (A7) and one query lists candidate technicians (qualified, active) and bays (active), excluding those busy in `[start, end)`. `CandidateAllocator` walks the pairs in a deterministic order (sorted by id).
-6. For each candidate pair, the insert runs inside a **SAVEPOINT**. On exclusion violation (`23P01`) the savepoint is rolled back and the violated constraint name tells which resource was taken (technician, bay or vehicle, from the violated constraint). Every remaining pair that uses the taken technician or bay is skipped, and a taken vehicle ends the request with `VEHICLE_ALREADY_BOOKED`. Attempts are bounded (20). A savepoint is required because a failed statement otherwise aborts the whole PostgreSQL transaction. A deadlock (`40P01`), still possible when one vehicle is booked at two dealerships at once, is also rolled back to the savepoint and the same pair is retried (at most three times).
+6. Each pair is inserted inside a **SAVEPOINT**, so a failed insert undoes only that attempt; in PostgreSQL a failed statement otherwise aborts the whole transaction. At most 20 attempts. If the insert fails:
+   - Exclusion violation (`23P01`) on a technician or bay: that technician or bay is skipped in all remaining pairs.
+   - Exclusion violation on the vehicle: the request ends with `VEHICLE_ALREADY_BOOKED`.
+   - Deadlock (`40P01`), possible only when one vehicle is booked at two dealerships at once: the same pair is retried, at most three times.
 7. No pair succeeds: `SLOT_UNAVAILABLE`. No qualified technician exists at the dealership: `NO_QUALIFIED_TECHNICIAN`.
 8. The result is stored for idempotent replay, the transaction commits, and `201` is returned. Booking events are logged as structured events.
 
@@ -100,6 +78,10 @@ Any failure rolls back the transaction, including the idempotency row, which is 
 ## 3. Data Model (PostgreSQL)
 
 Enable `btree_gist`. Use plain SQL migrations (`src/database/migrations/`, applied on startup). Use `uuid` primary keys and `timestamptz` (UTC). TypeORM entities in `src/database/entities/` map the tables for reads; they do not map `time_range` and never generate schema.
+
+![Entity-relationship diagram](diagrams/erd.svg)
+
+Columns and constraints of each table:
 
 | Table               | Key columns                                                                                                                                              | Constraints                                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -164,7 +146,10 @@ Availability is advisory: it reserves nothing, and `POST /appointments` re-check
 
 The test cases themselves are listed in `SPEC.md` (Acceptance Tests). This section defines how they are run.
 
-- **Unit** tests cover `BookingPolicyService`, `CandidateAllocator` and the time utilities, with no database.
+- **Unit** tests cover the pure rules, with no database:
+  - `BookingPolicyService`: start in the future and on a slot boundary (A5); opening hours, Sunday and midnight in the dealership timezone (A4); the slot starts offered by availability.
+  - `CandidateAllocator`: deterministic pair order, skipping a taken technician or bay, and the attempt limit.
+  - Time utilities in `common/time/`: half-open range overlap (A3) and timezone conversion, including daylight saving.
 - Service behavior is covered by integration tests through HTTP against real PostgreSQL, because its correctness depends on constraints, transactions and savepoints that fakes cannot reproduce.
 - **Integration and concurrency** tests run against a real PostgreSQL instance through Testcontainers. SQLite or an in-memory database is never a substitute.
 - Tests run inside the `app` container, so Testcontainers needs the host Docker daemon: mount `/var/run/docker.sock` into the `app` service and set `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`.
