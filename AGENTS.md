@@ -17,6 +17,8 @@ At the start of every session, read `docs/PLAN.md` to find the current step. The
 | `README.md`             | Commands for running, testing and the demo                                           | Running anything                              |
 | `docs/ai-log.md`        | Record of human oversight for reviewers                                              | Only when adding an entry (see below)         |
 
+`submission/system-design.md` (and its PDF) is a standalone copy of `docs/SPEC.md` and `docs/SYSTEM_DESIGN.md` compiled for the submission. It is not a source of truth: when those documents change, update it and export the PDF again.
+
 Each fact has one home. When a document needs a fact defined elsewhere, link to it by file and heading; do not copy it and do not reference section numbers.
 
 ## Language policy

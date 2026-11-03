@@ -22,6 +22,8 @@ NestJS and PostgreSQL. Everything runs in Docker; no Node.js installation is req
 | [`docs/PLAN.md`](docs/PLAN.md)                   | Build order and progress                                                      |
 | [`docs/ai-log.md`](docs/ai-log.md)               | Record of AI collaboration and human oversight                                |
 
+The submitted System Design Document is [`submission/system-design.pdf`](submission/system-design.pdf), a standalone document compiled from the specification and the design, with its source in [`submission/system-design.md`](submission/system-design.md).
+
 ## Getting started
 
 ```bash
@@ -159,7 +161,6 @@ This project was built with Claude Code as the implementation agent. I kept the 
 | What the agent did                                                          | How it was caught                                 | Outcome                                                                                           |
 | --------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Built a Clean Architecture with ports, use-case classes and in-memory fakes | My code review: too hard to follow for this scope | Rebuilt as standard NestJS modules and services; fakes replaced by PostgreSQL tests               |
-| Committed tests and code together, hiding test-first                        | My review of the commit list                      | History split into `test:` and `feat:` commits                                                    |
 | Parallel bookings returned `500 deadlock detected`                          | Concurrency tests                                 | First fix (retry only) failed under repeated runs; replaced by a per-dealership-day advisory lock |
 
 **Quality gates.** TypeScript strict mode, type-aware oxlint (no floating promises, no `any`, no `console`), Prettier, Conventional Commits enforced by a Git hook, and the full test suite in the container before each commit.

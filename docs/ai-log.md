@@ -83,9 +83,9 @@ Each entry feeds the AI Collaboration Narrative in the README and the video walk
 
 - Build the booking service: allocate a qualified technician and a free bay in one transaction, test first.
 
-| Issue                                                                                | Caught by                | Root cause                     | Fix                                                                                                                             |
-| ------------------------------------------------------------------------------------ | ------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Rules sat in a separate `scheduling/` folder that was neither a module nor a service | Owner review             | Leftover of the layered design | Rules became `BookingPolicyService` in `AppointmentsModule`; time utilities and errors moved to `common/`; unit tests colocated |
+| Issue                                                                                | Caught by    | Root cause                     | Fix                                                                                                                             |
+| ------------------------------------------------------------------------------------ | ------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Rules sat in a separate `scheduling/` folder that was neither a module nor a service | Owner review | Leftover of the layered design | Rules became `BookingPolicyService` in `AppointmentsModule`; time utilities and errors moved to `common/`; unit tests colocated |
 
 | Owner decision                                                | Reason                                              |
 | ------------------------------------------------------------- | --------------------------------------------------- |

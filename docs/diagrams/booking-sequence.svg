@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 800" width="1080" height="800" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow-a" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,1 L12,6 L0,11 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-b" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,1 L12,6 L0,11 Z" fill="#9333ea"/>
+    </marker>
+  </defs>
+
+  <rect width="1080" height="800" rx="8" fill="#ffffff"/>
+
+  <!-- Participants. -->
+  <rect x="40" y="24" width="140" height="52" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <rect x="230" y="24" width="140" height="52" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <rect x="470" y="24" width="180" height="52" rx="6" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <rect x="790" y="24" width="180" height="52" rx="6" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+  <g text-anchor="middle" font-size="14" font-weight="600">
+    <text x="110" y="47" fill="#1e1b4b">Client A</text>
+    <text x="300" y="47" fill="#1e1b4b">Client B</text>
+    <text x="560" y="47" fill="#064e3b">Booking service</text>
+    <text x="880" y="47" fill="#7c2d12">PostgreSQL</text>
+  </g>
+  <g text-anchor="middle" font-size="12">
+    <text x="110" y="65" fill="#4338ca">same slot</text>
+    <text x="300" y="65" fill="#4338ca">same slot</text>
+    <text x="560" y="65" fill="#047857">AppointmentsService</text>
+    <text x="880" y="65" fill="#c2410c">one technician, one bay</text>
+  </g>
+
+  <!-- Lifelines. -->
+  <g stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4">
+    <path d="M110,76 V716"/>
+    <path d="M300,76 V716"/>
+    <path d="M560,76 V716"/>
+    <path d="M880,76 V716"/>
+  </g>
+
+  <!-- Allocation loop frame. -->
+  <rect x="530" y="388" width="380" height="80" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <path d="M530,388 H636 V400 L626,410 H530 Z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2"/>
+  <text x="538" y="403" font-size="11" font-weight="600" fill="#334155">loop: each pair</text>
+
+  <!-- B waits on the advisory lock. -->
+  <path d="M880,304 H1040 V566 H880" stroke="#9333ea" stroke-width="1.5" stroke-dasharray="3 3" fill="none"/>
+  <text x="1030" y="432" font-size="12" fill="#9333ea" text-anchor="end">B waits</text>
+  <text x="1030" y="448" font-size="12" fill="#9333ea" text-anchor="end">for A's lock</text>
+
+  <!-- Request A messages. -->
+  <g stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow-a)">
+    <path d="M110,116 H560"/>
+    <path d="M560,196 H880"/>
+    <path d="M560,232 H880"/>
+    <path d="M560,340 H880"/>
+    <path d="M560,428 H880"/>
+    <path d="M560,500 H880"/>
+  </g>
+  <g stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-a)">
+    <path d="M880,368 H560"/>
+    <path d="M880,456 H560"/>
+    <path d="M560,532 H110"/>
+  </g>
+  <g font-size="12.5" fill="#1e40af" text-anchor="middle">
+    <text x="335" y="108">POST /appointments, key A</text>
+    <text x="720" y="188">BEGIN · claim key A · validate</text>
+    <text x="720" y="224">advisory lock (dealership, day)</text>
+    <text x="720" y="332">find free technicians and bays</text>
+    <text x="720" y="362">T1 · Bay 1</text>
+    <text x="720" y="420">SAVEPOINT · INSERT (T1, Bay 1)</text>
+    <text x="720" y="450">inserted: EXCLUDE constraints pass</text>
+    <text x="720" y="492">record result for replay · COMMIT</text>
+    <text x="335" y="524">201 Created</text>
+  </g>
+  <g font-size="12" fill="#2563eb">
+    <text x="890" y="236">granted to A</text>
+    <text x="890" y="504">lock released</text>
+  </g>
+
+  <!-- Request B messages. -->
+  <g stroke="#9333ea" stroke-width="1.5" fill="none" marker-end="url(#arrow-b)">
+    <path d="M300,150 H560"/>
+    <path d="M560,268 H880"/>
+    <path d="M560,304 H880"/>
+    <path d="M560,602 H880"/>
+    <path d="M560,666 H880"/>
+  </g>
+  <g stroke="#9333ea" stroke-width="1.5" stroke-dasharray="6 4" fill="none" marker-end="url(#arrow-b)">
+    <path d="M880,566 H560"/>
+    <path d="M880,630 H560"/>
+    <path d="M560,700 H300"/>
+  </g>
+  <g font-size="12.5" fill="#6b21a8" text-anchor="middle">
+    <text x="430" y="142">POST /appointments, key B</text>
+    <text x="720" y="260">BEGIN · claim key B · validate</text>
+    <text x="720" y="296">advisory lock (dealership, day)</text>
+    <text x="720" y="560">lock granted to B</text>
+    <text x="720" y="594">find free technicians and bays</text>
+    <text x="720" y="624">none: T1 and Bay 1 are booked</text>
+    <text x="720" y="658">ROLLBACK, key B released (A11)</text>
+    <text x="430" y="692">409 SLOT_UNAVAILABLE</text>
+  </g>
+
+  <!-- Safety-net note. -->
+  <rect x="40" y="732" width="1000" height="48" rx="6" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.2"/>
+  <g font-size="12.5" fill="#334155">
+    <text x="56" y="752">The lock only orders bookings. The guarantee is the EXCLUDE constraint: if an INSERT overlaps a committed booking, PostgreSQL</text>
+    <text x="56" y="770">rejects it (23P01); the service rolls back to the savepoint, skips that technician or bay, and tries the next pair.</text>
+  </g>
+</svg>

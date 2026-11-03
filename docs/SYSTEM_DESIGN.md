@@ -62,13 +62,13 @@ Rules:
    - Unexpired key, same hash: the stored appointment is replayed (`200`, `Idempotent-Replayed: true`).
    - Unexpired key, different hash: `IDEMPOTENCY_KEY_REUSED`.
    - Expired key: overwritten and treated as new (A12).
-4. The dealership, service type and vehicle are loaded; the vehicle's owner becomes the appointment's customer (A8). `BookingPolicyService` validates: start in the future, slot alignment, opening hours in the dealership timezone.
+4. The dealership, service type and vehicle are loaded; the vehicle's owner becomes the appointment's customer (A8). `BookingPolicyService` validates: start in the future, slot alignment, opening hours in the dealership timezone. If no active technician at the dealership holds the required skill, the request ends with `NO_QUALIFIED_TECHNICIAN`.
 5. A transaction-level advisory lock on (dealership, local day) is taken, so overlapping bookings at one dealership queue instead of deadlocking on each other's uncommitted rows. Then the vehicle is checked (A7) and one query lists candidate technicians (qualified, active) and bays (active), excluding those busy in `[start, end)`. `CandidateAllocator` walks the pairs in a deterministic order (sorted by id).
 6. Each pair is inserted inside a **SAVEPOINT**, so a failed insert undoes only that attempt; in PostgreSQL a failed statement otherwise aborts the whole transaction. At most 20 attempts. If the insert fails:
    - Exclusion violation (`23P01`) on a technician or bay: that technician or bay is skipped in all remaining pairs.
    - Exclusion violation on the vehicle: the request ends with `VEHICLE_ALREADY_BOOKED`.
    - Deadlock (`40P01`), possible only when one vehicle is booked at two dealerships at once: the same pair is retried, at most three times.
-7. No pair succeeds: `SLOT_UNAVAILABLE`. No qualified technician exists at the dealership: `NO_QUALIFIED_TECHNICIAN`.
+7. No pair succeeds: `SLOT_UNAVAILABLE`.
 8. The result is stored for idempotent replay, the transaction commits, and `201` is returned. Booking events are logged as structured events.
 
 Any failure rolls back the transaction, including the idempotency row, which is how A11 holds.
